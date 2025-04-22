@@ -1,4 +1,3 @@
-
 import React from 'react';
 import Logo from '@/components/Logo';
 import { Card } from '@/components/ui/card';
@@ -83,8 +82,10 @@ const TeamReportPage = () => {
   const navigate = useNavigate();
 
   const handleViewDetails = (memberId: number) => {
-    console.log(`Viewing details for member ${memberId}`);
-    // Future implementation: navigate to individual report
+    const member = teamReports.find((m) => m.id === memberId);
+    if (member) {
+      navigate(`/relatorio-vendedor/${encodeURIComponent(member.name)}`);
+    }
   };
 
   const handleDownloadPDF = () => {
