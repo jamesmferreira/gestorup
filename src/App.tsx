@@ -15,7 +15,10 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 // App pages
 import Dashboard from "./pages/Dashboard";
 import TasksPage from "./pages/TasksPage";
+import DailyTasksPage from "./pages/DailyTasksPage";
+import TaskReportsPage from "./pages/TaskReportsPage";
 import TeamManagementPage from "./pages/TeamManagementPage";
+import UserManagementPage from "./pages/UserManagementPage";
 import TeamReportPage from "./pages/TeamReportPage";
 import VendorReportPage from "./pages/VendorReportPage";
 import NotFound from "./pages/NotFound";
@@ -43,12 +46,22 @@ const App = () => (
             } />
             <Route path="/tarefas" element={
               <ProtectedRoute>
-                <TasksPage />
+                <DailyTasksPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/relatorios" element={
+              <ProtectedRoute>
+                <TaskReportsPage />
               </ProtectedRoute>
             } />
             <Route path="/equipe" element={
               <ProtectedRoute>
                 <TeamManagementPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/usuarios" element={
+              <ProtectedRoute>
+                <UserManagementPage />
               </ProtectedRoute>
             } />
             <Route path="/relatorio-equipe" element={

@@ -4,31 +4,38 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import { LogOut, Home, CheckSquare, Users, BarChart } from "lucide-react";
+import { LogOut, Home, CheckSquare, Users, BarChart, Calendar, User } from "lucide-react";
 
 interface NavLinkProps {
   to: string;
   icon: React.ReactNode;
   label: string;
   active: boolean;
+  hidden?: boolean;
 }
 
-const NavLink = ({ to, icon, label, active }: NavLinkProps) => (
-  <Link to={to} className={`flex items-center p-2 rounded-lg ${
-    active ? "bg-white/20 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
-  } transition-all`}>
-    <div className="mr-2">
-      {icon}
-    </div>
-    <span>{label}</span>
-  </Link>
-);
+const NavLink = ({ to, icon, label, active, hidden }: NavLinkProps) => {
+  if (hidden) return null;
+  
+  return (
+    <Link to={to} className={`flex items-center p-2 rounded-lg ${
+      active ? "bg-white/20 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
+    } transition-all`}>
+      <div className="mr-2">
+        {icon}
+      </div>
+      <span>{label}</span>
+    </Link>
+  );
+};
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const { logout, currentUser } = useAuth();
+  const { logout, currentUser, userProfile } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
+  const isAdmin = userProfile?.role === 'admin';
+  const isGestor = userProfile?.role === 'gestor' || isAdmin;
 
   return (
     <div className="min-h-screen bg-[#1A1F2C] flex flex-col">
@@ -39,7 +46,13 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-white/70 text-sm hidden md:block">
-            {currentUser?.email}
+            {userProfile?.name || currentUser?.email} 
+            {userProfile?.role && (
+              <span className="ml-2 px-2 py-0.5 bg-white/10 text-xs rounded-full">
+                {userProfile.role === 'admin' ? 'Admin' : 
+                 userProfile.role === 'gestor' ? 'Gestor' : 'Vendedor'}
+              </span>
+            )}
           </span>
           <Button 
             variant="ghost" 
@@ -66,20 +79,35 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <NavLink 
               to="/tarefas" 
               icon={<CheckSquare size={18} />} 
-              label="Tarefas" 
+              label="Tarefas Diárias" 
               active={isActive("/tarefas")} 
+            />
+            <NavLink 
+              to="/relatorios" 
+              icon={<Calendar size={18} />} 
+              label="Relatórios" 
+              active={isActive("/relatorios")} 
             />
             <NavLink 
               to="/equipe" 
               icon={<Users size={18} />} 
               label="Equipe" 
-              active={isActive("/equipe")} 
+              active={isActive("/equipe")}
+              hidden={!isGestor}
+            />
+            <NavLink 
+              to="/usuarios" 
+              icon={<User size={18} />} 
+              label="Usuários" 
+              active={isActive("/usuarios")}
+              hidden={!isGestor}
             />
             <NavLink 
               to="/relatorio-equipe" 
               icon={<BarChart size={18} />} 
-              label="Relatórios" 
-              active={isActive("/relatorio-equipe")} 
+              label="Desempenho" 
+              active={isActive("/relatorio-equipe")}
+              hidden={!isGestor}
             />
           </div>
         </nav>
