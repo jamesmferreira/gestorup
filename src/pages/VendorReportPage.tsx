@@ -1,57 +1,114 @@
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Download, User, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import AppLayout from "@/components/AppLayout";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { toast } from "@/components/ui/sonner";
 
-const fakeVendors = [
-  {
-    name: "Ana Silva",
-    profilePic: undefined,
-    tasksCompleted: 98,
-    meta: 100,
-    activities: [
-      { label: "Stories", value: 60, color: "#22C55E" },
-      { label: "Marketplace", value: 35, color: "#3B82F6" }
-    ]
-  },
-  {
-    name: "Carlos Santos",
-    profilePic: undefined,
-    tasksCompleted: 91,
-    meta: 93,
-    activities: [
-      { label: "Stories", value: 55, color: "#22C55E" },
-      { label: "Marketplace", value: 36, color: "#3B82F6" }
-    ]
-  },
-  {
-    name: "Júlia Oliveira",
-    profilePic: undefined,
-    tasksCompleted: 85,
-    meta: 87,
-    activities: [
-      { label: "Stories", value: 54, color: "#22C55E" },
-      { label: "Marketplace", value: 31, color: "#3B82F6" }
-    ]
-  }
-];
+interface VendorData {
+  id: string;
+  name: string;
+  profilePic?: string;
+  tasksCompleted: number;
+  totalTasks: number;
+  meta: number;
+  activities: {
+    label: string;
+    value: number;
+    color: string;
+  }[];
+}
 
 const VendorReportPage = () => {
   const { nome } = useParams();
   const navigate = useNavigate();
-  const vendor = fakeVendors.find(
-    v => v.name.toLowerCase().includes((nome || "").toLowerCase())
-  );
+  const [vendor, setVendor] = useState<VendorData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchVendorData = async () => {
+      if (!nome) return;
+      
+      try {
+        // Find the colaborador by name
+        const colaboradoresRef = collection(db, "colaboradores");
+        const q = query(colaboradoresRef, where("nome", "==", nome));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          setLoading(false);
+          return; // No matching vendor found
+        }
+        
+        const colaboradorDoc = querySnapshot.docs[0];
+        const colaboradorId = colaboradorDoc.id;
+        
+        // Fetch tasks associated with this colaborador
+        const tasksRef = collection(db, "tarefas");
+        const tasksQuery = query(tasksRef, where("colaborador_id", "==", colaboradorId));
+        const tasksSnapshot = await getDocs(tasksQuery);
+        
+        let completedTasks = 0;
+        let pendingTasks = 0;
+        
+        tasksSnapshot.forEach(doc => {
+          if (doc.data().status === "concluído") {
+            completedTasks++;
+          } else {
+            pendingTasks++;
+          }
+        });
+        
+        const totalTasks = completedTasks + pendingTasks;
+        const metaPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+        
+        // Create vendor object
+        const vendorData: VendorData = {
+          id: colaboradorId,
+          name: colaboradorDoc.data().nome,
+          profilePic: undefined,
+          tasksCompleted: completedTasks,
+          totalTasks: totalTasks,
+          meta: metaPercentage,
+          activities: [
+            { label: "Stories", value: Math.floor(completedTasks * 0.6), color: "#22C55E" },
+            { label: "Marketplace", value: Math.floor(completedTasks * 0.4), color: "#3B82F6" }
+          ]
+        };
+        
+        setVendor(vendorData);
+      } catch (error) {
+        console.error("Error fetching vendor data:", error);
+        toast.error("Erro ao carregar dados do vendedor");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchVendorData();
+  }, [nome]);
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-full">
+          <p className="text-white">Carregando dados...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   if (!vendor) {
     return (
       <div className="min-h-screen bg-[#1A1F2C] text-white flex flex-col items-center justify-center">
         <h1 className="text-3xl mb-2">Vendedor não encontrado</h1>
-        <Button variant="ghost" className="mt-4" onClick={() => navigate(-1)}>
+        <Button variant="ghost" className="mt-4" onClick={() => navigate("/equipe")}>
           Voltar
         </Button>
       </div>
@@ -59,10 +116,7 @@ const VendorReportPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#1A1F2C] p-6">
-      <header className="flex items-center mb-10">
-        <span className="text-white text-2xl font-bold tracking-tight">GestorUp</span>
-      </header>
+    <AppLayout>
       <main className="max-w-2xl mx-auto">
         <h1 className="text-white text-3xl font-semibold mb-3 text-center">
           Relatório Individual
@@ -111,7 +165,7 @@ const VendorReportPage = () => {
           </Button>
         </div>
       </main>
-    </div>
+    </AppLayout>
   );
 };
 

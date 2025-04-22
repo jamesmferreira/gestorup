@@ -1,14 +1,24 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import TeamPage from "./pages/TeamPage";
+import { AuthProvider } from "./contexts/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+// Auth pages
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+
+// App pages
+import Dashboard from "./pages/Dashboard";
+import TasksPage from "./pages/TasksPage";
+import TeamManagementPage from "./pages/TeamManagementPage";
 import TeamReportPage from "./pages/TeamReportPage";
-import DailyTasksPage from "./pages/DailyTasksPage";
-import NotFound from "./pages/NotFound";
 import VendorReportPage from "./pages/VendorReportPage";
+import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
@@ -18,14 +28,44 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/equipe" element={<TeamPage />} />
-          <Route path="/relatorio-equipe" element={<TeamReportPage />} />
-          <Route path="/relatorio-vendedor/:nome" element={<VendorReportPage />} />
-          <Route path="/tarefas-diarias" element={<DailyTasksPage />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            {/* Auth Routes */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            
+            {/* Protected Routes */}
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/tarefas" element={
+              <ProtectedRoute>
+                <TasksPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/equipe" element={
+              <ProtectedRoute>
+                <TeamManagementPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/relatorio-equipe" element={
+              <ProtectedRoute>
+                <TeamReportPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/relatorio-vendedor/:nome" element={
+              <ProtectedRoute>
+                <VendorReportPage />
+              </ProtectedRoute>
+            } />
+            
+            {/* Not Found */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
