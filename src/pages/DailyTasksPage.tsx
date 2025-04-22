@@ -1,93 +1,62 @@
-
-import React, { useState } from 'react';
-import Logo from '@/components/Logo';
-import { CheckSquare, Instagram, Video, MessageSquare, Phone, ShoppingCart } from 'lucide-react';
-
-type Task = {
-  id: number;
-  title: string;
-  icon: React.ComponentType;
-  completed: boolean;
-};
+import React from 'react';
+import { User } from 'lucide-react';
 
 const DailyTasksPage = () => {
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: 1, title: 'Postagem nos Stories', icon: Instagram, completed: false },
-    { id: 2, title: 'Postagem no Feed', icon: Instagram, completed: false },
-    { id: 3, title: 'Gravar Conteúdo', icon: Video, completed: false },
-    { id: 4, title: 'Prova Social', icon: MessageSquare, completed: false },
-    { id: 5, title: 'Revisar Directs e Instagram', icon: Instagram, completed: false },
-    { id: 6, title: 'Fazer 15 Contatos', icon: Phone, completed: false },
-    { id: 7, title: 'Marketplace', icon: ShoppingCart, completed: false },
-  ]);
-
-  const toggleTask = (id: number) => {
-    setTasks(tasks.map(task => 
-      task.id === id ? {...task, completed: !task.completed} : task
-    ));
-  };
-
-  const submitReport = () => {
-    console.log('Relatório enviado', tasks);
-    // Aqui poderia ir a lógica de envio de relatório
-  };
-
   return (
-    <div className="min-h-screen bg-[#1A1F2C] p-6">
-      <header className="flex justify-between items-center mb-12">
-        <Logo />
+    <div className="container mx-auto p-4">
+      <header className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Tarefas Diárias</h1>
+        <p className="text-gray-600">Gerencie suas tarefas do dia</p>
       </header>
       
-      <main className="max-w-4xl mx-auto">
-        <h1 className="text-white text-3xl font-medium mb-8">
-          Suas Tarefas de Hoje
-        </h1>
-        
-        <div className="space-y-4 mb-8">
-          {tasks.map((task) => (
-            <div 
-              key={task.id} 
-              className={`
-                flex items-center p-4 rounded-xl 
-                ${task.completed 
-                  ? 'bg-[#22C55E]/20 border border-[#22C55E]/30' 
-                  : 'bg-white/10 border border-white/20 hover:bg-white/20'}
-                transition-all duration-300 cursor-pointer
-              `}
-              onClick={() => toggleTask(task.id)}
-            >
-              <task.icon 
-                size={24} 
-                className={task.completed ? 'text-[#22C55E]' : 'text-white/70'}
-              />
-              <span 
-                className={`
-                  ml-4 text-lg 
-                  ${task.completed ? 'text-[#22C55E] line-through' : 'text-white'}
-                `}
-              >
-                {task.title}
-              </span>
-              <CheckSquare 
-                size={24} 
-                className={`ml-auto ${task.completed ? 'text-[#22C55E]' : 'text-white/30'}`} 
-              />
-            </div>
-          ))}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center mb-4">
+          <User className="w-6 h-6 text-blue-500 mr-2" />
+          <h2 className="text-xl font-semibold">Minhas Tarefas</h2>
         </div>
-
-        <button 
-          onClick={submitReport}
-          className="
-            w-full bg-[#00F0FF] text-white 
-            py-4 rounded-xl font-bold text-lg
-            hover:bg-[#00C3FF] transition-colors
-            flex items-center justify-center
-          "
-        >
-          ENVIAR RELATÓRIO
+        
+        <div className="space-y-4">
+          <div className="border rounded-md p-4 hover:bg-gray-50">
+            <div className="flex justify-between items-center">
+              <h3 className="font-medium">Revisar relatórios de vendas</h3>
+              <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">Em progresso</span>
+            </div>
+            <p className="text-sm text-gray-600 mt-1">Analisar os relatórios de vendas do último trimestre</p>
+            <div className="flex justify-between items-center mt-3">
+              <span className="text-xs text-gray-500">Prazo: Hoje, 17:00</span>
+              <button className="text-sm text-blue-600 hover:text-blue-800">Concluir</button>
+            </div>
+          </div>
+          
+          <div className="border rounded-md p-4 hover:bg-gray-50">
+            <div className="flex justify-between items-center">
+              <h3 className="font-medium">Reunião com equipe de marketing</h3>
+              <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Concluído</span>
+            </div>
+            <p className="text-sm text-gray-600 mt-1">Discutir estratégias para o próximo mês</p>
+            <div className="flex justify-between items-center mt-3">
+              <span className="text-xs text-gray-500">Concluído às 10:30</span>
+              <button className="text-sm text-gray-600 hover:text-gray-800">Reabrir</button>
+            </div>
+          </div>
+          
+          <div className="border rounded-md p-4 hover:bg-gray-50">
+            <div className="flex justify-between items-center">
+              <h3 className="font-medium">Preparar apresentação para clientes</h3>
+              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">Pendente</span>
+            </div>
+            <p className="text-sm text-gray-600 mt-1">Criar slides para apresentação de novos produtos</p>
+            <div className="flex justify-between items-center mt-3">
+              <span className="text-xs text-gray-500">Prazo: Amanhã, 12:00</span>
+              <button className="text-sm text-blue-600 hover:text-blue-800">Iniciar</button>
+            </div>
+          </div>
+        </div>
+        
+        <button className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md">
+          Adicionar Nova Tarefa
         </button>
-      </main>
+      </div>
     </div>
   );
 };
