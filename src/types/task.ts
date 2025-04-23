@@ -5,20 +5,21 @@ export interface Task {
   description: string;
   deadline?: Date;
   status: 'pendente' | 'em_progresso' | 'concluido';
-  assignedTo?: string; // user UID
-  completedAt?: number;
+  assigned_to?: string; // user id
+  manager_id?: string; // manager user id
+  completed_at?: number;
   date: string; // YYYY-MM-DD format for the day this task belongs to
-  createdBy: string; // user UID
-  createdAt: number;
+  created_by: string; // user id
+  created_at: number;
 }
 
 export interface TaskRecord {
   id: string;
-  taskId: string;
-  userId: string;
+  task_id: string;
+  user_id: string;
   userName: string;
   date: string; // YYYY-MM-DD format
   status: 'pendente' | 'em_progresso' | 'concluido';
-  completedAt?: number;
+  completed_at?: number;
   notes?: string;
 }

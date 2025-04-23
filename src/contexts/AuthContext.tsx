@@ -68,7 +68,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return null;
       }
       
-      setUserProfile(data);
+      // Set user profile with the profile data from database
+      setUserProfile(data as UserProfile);
       return data;
     } catch (error: any) {
       console.error("Error fetching user profile:", error);
@@ -101,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (email: string, password: string, name: string) => {
     try {
-      // Only register the user with email, password, and name in metadata
+      // Register the user with email, password, and name in metadata
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -112,8 +113,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) throw error;
       
-      // The database trigger should handle creation of the pending_users entry
-      toast.info("Sua solicitação de registro foi enviada. Aguarde a aprovação do administrador.");
+      // The database trigger should handle creation of the profile entry
+      toast.success("Cadastro realizado com sucesso! Você já pode fazer login.");
       navigate("/login");
     } catch (error: any) {
       console.error("Registration error:", error);

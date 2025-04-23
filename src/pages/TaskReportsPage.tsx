@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,6 +21,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { TaskRecord } from '@/types/task';
+import { toast } from '@/components/ui/sonner';
 
 const TaskReportsPage = () => {
   const { userProfile } = useAuth();
@@ -51,12 +53,12 @@ const TaskReportsPage = () => {
       const startDateStr = format(startDate, 'yyyy-MM-dd');
       const endDateStr = format(endDate, 'yyyy-MM-dd');
       
+      // Updated to remove company_id filtering
       const { data, error } = await supabase
         .from('task_records')
         .select('*')
         .gte('date', startDateStr)
         .lte('date', endDateStr)
-        .eq('company_id', userProfile.company_id)
         .order('date', { ascending: false });
       
       if (error) throw error;
@@ -75,7 +77,19 @@ const TaskReportsPage = () => {
         completionRate: total > 0 ? (completed / total) * 100 : 0
       });
       
-      setRecords(data);
+      // Map the raw data to TaskRecord objects
+      const mappedRecords: TaskRecord[] = data.map(record => ({
+        id: record.id,
+        task_id: record.task_id,
+        user_id: record.user_id,
+        userName: record.user_name || 'Unknown', // Assume we have user_name in records or add it
+        date: record.date,
+        status: record.status,
+        completed_at: record.completed_at,
+        notes: record.notes
+      }));
+      
+      setRecords(mappedRecords);
       setHasMore(false);
     } catch (error) {
       console.error('Error fetching task records:', error);
@@ -99,7 +113,7 @@ const TaskReportsPage = () => {
         record.userName,
         record.status === 'pendente' ? 'Pendente' :
         record.status === 'em_progresso' ? 'Em Progresso' : 'Concluído',
-        record.completedAt ? format(new Date(record.completedAt), 'dd/MM/yyyy HH:mm') : '',
+        record.completed_at ? format(new Date(record.completed_at), 'dd/MM/yyyy HH:mm') : '',
         record.notes || ''
       ].join(','))
     ].join('\n');
@@ -281,7 +295,7 @@ const TaskReportsPage = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {record.completedAt ? format(new Date(record.completedAt), 'dd/MM/yyyy HH:mm') : '-'}
+                        {record.completed_at ? format(new Date(record.completed_at), 'dd/MM/yyyy HH:mm') : '-'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {record.notes || '-'}

@@ -11,6 +11,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import Register2UsersPage from "./pages/Register2UsersPage";
 
 // App pages
 import Dashboard from "./pages/Dashboard";
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/setup-test-users" element={<Register2UsersPage />} />
             
             {/* Protected Routes */}
             <Route path="/" element={

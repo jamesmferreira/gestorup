@@ -1,22 +1,23 @@
+
 import React, { useEffect, useState } from 'react';
 import { User, Calendar, Plus, Check } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { format, startOfDay } from 'date-fns';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
 import AppLayout from '@/components/AppLayout';
-import { Task, TaskRecord } from '@/types/task';
+import { Task } from '@/types/task';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 
 const DailyTasksPage = () => {
   const { currentUser, userProfile } = useAuth();
-  const [tasks, setTasks] = useState<(Task & { status?: 'pendente' | 'em_progresso' | 'concluido', completedAt?: number })[]>([]);
+  const [tasks, setTasks] = useState<(Task & { status?: 'pendente' | 'em_progresso' | 'concluido', completed_at?: number })[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [formattedDate, setFormattedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
@@ -36,49 +37,57 @@ const DailyTasksPage = () => {
         const dateString = format(selectedDate, 'yyyy-MM-dd');
         setFormattedDate(dateString);
         
-        let tasksQuery;
+        let query;
         
-        if (isAdmin || isGestor) {
-          // Admins and Gestores see all tasks for the day
-          tasksQuery = query(
-            collection(db, 'tasks'),
-            where('date', '==', dateString)
-          );
+        if (isAdmin) {
+          // Admins see all tasks
+          query = supabase
+            .from('tasks')
+            .select('*')
+            .eq('date', dateString);
+        } else if (isGestor) {
+          // Gestors see tasks they created or where they are managers
+          query = supabase
+            .from('tasks')
+            .select('*')
+            .eq('date', dateString)
+            .or(`created_by.eq.${currentUser.id},manager_id.eq.${currentUser.id}`);
         } else {
           // Vendedores see only their assigned tasks
-          tasksQuery = query(
-            collection(db, 'tasks'),
-            where('date', '==', dateString),
-            where('assignedTo', '==', currentUser.uid)
-          );
+          query = supabase
+            .from('tasks')
+            .select('*')
+            .eq('date', dateString)
+            .eq('assigned_to', currentUser.id);
         }
         
-        const tasksSnapshot = await getDocs(tasksQuery);
-        const tasksData: Task[] = [];
+        const { data: tasksData, error: tasksError } = await query;
         
-        tasksSnapshot.forEach((doc) => {
-          tasksData.push({ id: doc.id, ...doc.data() } as Task);
-        });
+        if (tasksError) throw tasksError;
         
-        // For each task, check if there's a record for today
+        // For each task, check if there's a record for today for the current user
         const tasksWithStatus = await Promise.all(
-          tasksData.map(async (task) => {
-            const recordRef = query(
-              collection(db, 'taskRecords'),
-              where('taskId', '==', task.id),
-              where('date', '==', dateString),
-              where('userId', '==', currentUser.uid)
-            );
+          (tasksData || []).map(async (task: Task) => {
+            const { data: recordData, error: recordError } = await supabase
+              .from('task_records')
+              .select('*')
+              .eq('task_id', task.id)
+              .eq('date', dateString)
+              .eq('user_id', currentUser.id)
+              .single();
             
-            const recordSnap = await getDocs(recordRef);
-            if (!recordSnap.empty) {
-              const recordData = recordSnap.docs[0].data();
+            if (recordError && recordError.code !== 'PGRST116') {
+              console.error('Error fetching task record:', recordError);
+            }
+            
+            if (recordData) {
               return { 
                 ...task, 
                 status: recordData.status,
-                completedAt: recordData.completedAt
+                completed_at: recordData.completed_at
               };
             }
+            
             return task;
           })
         );
@@ -92,8 +101,10 @@ const DailyTasksPage = () => {
       }
     };
 
-    fetchTasks();
-  }, [currentUser, selectedDate, isAdmin, isGestor]);
+    if (currentUser && userProfile) {
+      fetchTasks();
+    }
+  }, [currentUser, selectedDate, isAdmin, isGestor, userProfile]);
 
   const handleCreateTask = async () => {
     try {
@@ -110,27 +121,34 @@ const DailyTasksPage = () => {
       
       const dateString = format(selectedDate, 'yyyy-MM-dd');
       
-      const taskData: Omit<Task, 'id'> = {
+      const taskData = {
         title: newTask.title,
         description: newTask.description,
         status: 'pendente',
         date: dateString,
-        createdBy: currentUser.uid,
-        createdAt: Date.now(),
+        created_by: currentUser.id,
+        created_at: Date.now(),
+        manager_id: userProfile.role === 'gestor' ? currentUser.id : null
       };
       
       if (newTask.deadline) {
-        taskData.deadline = new Date(newTask.deadline);
+        taskData.deadline = new Date(newTask.deadline).toISOString();
       }
       
-      const taskRef = await addDoc(collection(db, 'tasks'), taskData);
+      const { data: taskData, error: taskError } = await supabase
+        .from('tasks')
+        .insert(taskData)
+        .select()
+        .single();
+      
+      if (taskError) throw taskError;
       
       toast.success('Tarefa criada com sucesso!');
       setNewTask({ title: '', description: '', deadline: '' });
       setIsNewTaskDialogOpen(false);
       
       // Add the new task to the list
-      setTasks([...tasks, { id: taskRef.id, ...taskData }]);
+      setTasks([...tasks, taskData]);
     } catch (error) {
       console.error('Error creating task:', error);
       toast.error('Erro ao criar tarefa');
@@ -142,46 +160,57 @@ const DailyTasksPage = () => {
       if (!currentUser || !userProfile) return;
       
       const dateString = format(selectedDate, 'yyyy-MM-dd');
-      const userId = currentUser.uid;
+      const userId = currentUser.id;
       
       // Check if record exists
-      const recordQuery = query(
-        collection(db, 'taskRecords'),
-        where('taskId', '==', task.id),
-        where('date', '==', dateString),
-        where('userId', '==', userId)
-      );
+      const { data: existingRecord, error: recordError } = await supabase
+        .from('task_records')
+        .select('*')
+        .eq('task_id', task.id)
+        .eq('date', dateString)
+        .eq('user_id', userId)
+        .single();
       
-      const recordSnapshot = await getDocs(recordQuery);
-      const completedAt = newStatus === 'concluido' ? Date.now() : undefined;
+      const completedAt = newStatus === 'concluido' ? Date.now() : null;
       
-      if (recordSnapshot.empty) {
-        // Create new record
-        await addDoc(collection(db, 'taskRecords'), {
-          taskId: task.id,
-          userId: userId,
-          userName: userProfile.name,
-          date: dateString,
-          status: newStatus,
-          completedAt,
-          updatedAt: Date.now()
-        });
+      if (recordError && recordError.code === 'PGRST116') {
+        // Record doesn't exist, create it
+        const { error: insertError } = await supabase
+          .from('task_records')
+          .insert({
+            task_id: task.id,
+            user_id: userId,
+            date: dateString,
+            status: newStatus,
+            completed_at: completedAt,
+            notes: ''
+          });
+          
+        if (insertError) throw insertError;
+      } else if (!recordError) {
+        // Record exists, update it
+        const { error: updateError } = await supabase
+          .from('task_records')
+          .update({
+            status: newStatus,
+            completed_at: completedAt
+          })
+          .eq('id', existingRecord.id);
+          
+        if (updateError) throw updateError;
       } else {
-        // Update existing record
-        const recordId = recordSnapshot.docs[0].id;
-        await updateDoc(doc(db, 'taskRecords', recordId), {
-          status: newStatus,
-          completedAt,
-          updatedAt: Date.now()
-        });
+        throw recordError;
       }
       
       // Update task in local state
       setTasks(tasks.map(t => 
-        t.id === task.id ? { ...t, status: newStatus, completedAt } : t
+        t.id === task.id ? { ...t, status: newStatus, completed_at: completedAt } : t
       ));
       
-      toast.success(`Status da tarefa atualizado para ${newStatus === 'pendente' ? 'Pendente' : newStatus === 'em_progresso' ? 'Em progresso' : 'Concluído'}`);
+      toast.success(`Status da tarefa atualizado para ${
+        newStatus === 'pendente' ? 'Pendente' : 
+        newStatus === 'em_progresso' ? 'Em progresso' : 'Concluído'
+      }`);
     } catch (error) {
       console.error('Error updating task status:', error);
       toast.error('Erro ao atualizar status da tarefa');
@@ -233,7 +262,7 @@ const DailyTasksPage = () => {
           <div className="flex items-center mb-4">
             <User className="w-6 h-6 text-blue-500 mr-2" />
             <h2 className="text-xl font-semibold">
-              {isAdmin || isGestor ? 'Todas as Tarefas' : 'Minhas Tarefas'} - {format(selectedDate, 'dd/MM/yyyy')}
+              {isAdmin ? 'Todas as Tarefas' : isGestor ? 'Tarefas da Equipe' : 'Minhas Tarefas'} - {format(selectedDate, 'dd/MM/yyyy')}
             </h2>
           </div>
           
@@ -266,7 +295,7 @@ const DailyTasksPage = () => {
                   <div className="flex justify-between items-center mt-3">
                     <span className="text-xs text-gray-500">
                       {task.deadline ? `Prazo: ${format(new Date(task.deadline), 'dd/MM/yyyy, HH:mm')}` : 
-                       task.status === 'concluido' && task.completedAt ? `Concluído em: ${format(new Date(task.completedAt), 'dd/MM/yyyy, HH:mm')}` : ''}
+                       task.status === 'concluido' && task.completed_at ? `Concluído em: ${format(new Date(task.completed_at), 'dd/MM/yyyy, HH:mm')}` : ''}
                     </span>
                     
                     <div className="flex space-x-2">

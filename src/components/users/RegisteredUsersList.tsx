@@ -8,7 +8,7 @@ interface RegisteredUsersListProps {
   users: UserProfile[];
   currentUserId?: string;
   currentUserRole?: string;
-  onUpdateRole: (userId: string, newRole: 'admin' | 'gestor' | 'vendedor') => void;
+  onUpdateRole: (userId: string, newRole: string) => void;
 }
 
 export const RegisteredUsersList = ({ 
@@ -42,7 +42,7 @@ export const RegisteredUsersList = ({
                 <Select
                   disabled={user.id === currentUserId || (user.role === 'admin' && currentUserRole !== 'admin')}
                   defaultValue={user.role}
-                  onValueChange={(value) => onUpdateRole(user.id, value as 'admin' | 'gestor' | 'vendedor')}
+                  onValueChange={(value) => onUpdateRole(user.id, value)}
                 >
                   <SelectTrigger className="w-32">
                     <SelectValue />

@@ -24,11 +24,10 @@ const UserManagementPage = () => {
       try {
         setLoading(true);
         
-        // Fetch approved users
+        // Fetch approved users (no more filtering by company_id)
         const { data: usersData, error: usersError } = await supabase
           .from('profiles')
-          .select('*')
-          .eq('company_id', userProfile.company_id);
+          .select('*');
         
         if (usersError) throw usersError;
         
@@ -39,8 +38,9 @@ const UserManagementPage = () => {
         
         if (pendingError) throw pendingError;
         
-        setUsers(usersData || []);
-        setPendingUsers(pendingData || []);
+        // Convert the data to match our UserProfile type
+        setUsers(usersData as UserProfile[] || []);
+        setPendingUsers(pendingData as PendingUser[] || []);
       } catch (error) {
         console.error('Error fetching users:', error);
         toast.error('Erro ao carregar os usuários');
@@ -64,8 +64,7 @@ const UserManagementPage = () => {
           email: pendingUser.email,
           name: pendingUser.name,
           role: 'vendedor', // Default role
-          approved: true,
-          company_id: userProfile?.company_id
+          approved: true
         });
       
       if (insertError) throw insertError;
@@ -116,7 +115,7 @@ const UserManagementPage = () => {
     }
   };
 
-  const updateUserRole = async (userId: string, newRole: 'admin' | 'gestor' | 'vendedor') => {
+  const updateUserRole = async (userId: string, newRole: string) => {
     try {
       const { error } = await supabase
         .from('profiles')

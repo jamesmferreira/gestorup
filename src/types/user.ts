@@ -3,9 +3,8 @@ export interface UserProfile {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'gestor' | 'vendedor';
+  role: string; // Changed from enum to string to match our database changes
   approved: boolean | null;
-  company_id: string | null;
   created_at: string;
 }
 
@@ -13,6 +12,13 @@ export interface PendingUser {
   id: string;
   email: string;
   name: string;
-  company_id: string | null;
   requested_at: string;
+}
+
+// Add manager relationship type
+export interface UserManager {
+  id: string;
+  user_id: string;
+  manager_id: string;
+  created_at: string;
 }
