@@ -42,7 +42,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', user.id)
         .single();
       
-      if (error) throw error;
+      if (error) {
+        // Check if the error is because the profile doesn't exist yet
+        if (error.code === 'PGRST116') {
+          // Profile might still be in pending status, check pending_users
+          const { data: pendingData } = await supabase
+            .from('pending_users')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+          
+          if (pendingData) {
+            toast.info("Sua conta está aguardando aprovação por um administrador.");
+            await logout();
+            return null;
+          }
+        }
+        
+        throw error;
+      }
       
       if (!data.approved) {
         toast.error("Sua conta está aguardando aprovação por um administrador.");
@@ -83,6 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (email: string, password: string, name: string) => {
     try {
+      // Only register the user with email, password, and name in metadata
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -93,10 +112,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) throw error;
       
+      // The database trigger should handle creation of the pending_users entry
       toast.info("Sua solicitação de registro foi enviada. Aguarde a aprovação do administrador.");
       navigate("/login");
     } catch (error: any) {
-      console.error(error);
+      console.error("Registration error:", error);
       toast.error("Erro ao registrar: " + (error.message || "Tente novamente"));
       throw error;
     }

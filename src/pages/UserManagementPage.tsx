@@ -1,15 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { User, Users, CheckCircle, XCircle } from 'lucide-react';
+import { User, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import { Card } from '@/components/ui/card';
 import { PendingUser, UserProfile } from '@/types/user';
 import AppLayout from '@/components/AppLayout';
+import { supabase } from '@/integrations/supabase/client';
 
 const UserManagementPage = () => {
   const { userProfile } = useAuth();
@@ -26,21 +25,24 @@ const UserManagementPage = () => {
 
       try {
         setLoading(true);
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        const pendingSnapshot = await getDocs(collection(db, 'pendingUsers'));
         
-        const usersData: UserProfile[] = [];
-        usersSnapshot.forEach(doc => {
-          usersData.push(doc.data() as UserProfile);
-        });
+        // Fetch approved users
+        const { data: usersData, error: usersError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('company_id', userProfile.company_id);
         
-        const pendingData: PendingUser[] = [];
-        pendingSnapshot.forEach(doc => {
-          pendingData.push(doc.data() as PendingUser);
-        });
+        if (usersError) throw usersError;
         
-        setUsers(usersData);
-        setPendingUsers(pendingData);
+        // Fetch pending users
+        const { data: pendingData, error: pendingError } = await supabase
+          .from('pending_users')
+          .select('*');
+        
+        if (pendingError) throw pendingError;
+        
+        setUsers(usersData || []);
+        setPendingUsers(pendingData || []);
       } catch (error) {
         console.error('Error fetching users:', error);
         toast.error('Erro ao carregar os usuários');
@@ -49,60 +51,90 @@ const UserManagementPage = () => {
       }
     };
 
-    fetchUsers();
+    if (userProfile) {
+      fetchUsers();
+    }
   }, [userProfile]);
 
   const approveUser = async (pendingUser: PendingUser) => {
     try {
       // Create user profile
-      const newUserProfile: UserProfile = {
-        uid: pendingUser.uid,
-        email: pendingUser.email || '',
-        name: pendingUser.name || '',
-        role: 'vendedor', // Default role
-        approved: true,
-        createdAt: Date.now()
-      };
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert({
+          id: pendingUser.id,
+          email: pendingUser.email,
+          name: pendingUser.name,
+          role: 'vendedor', // Default role
+          approved: true,
+          company_id: userProfile?.company_id
+        });
       
-      await setDoc(doc(db, 'users', pendingUser.uid), newUserProfile);
-      await deleteDoc(doc(db, 'pendingUsers', pendingUser.uid));
+      if (insertError) throw insertError;
+      
+      // Remove from pending users
+      const { error: deleteError } = await supabase
+        .from('pending_users')
+        .delete()
+        .eq('id', pendingUser.id);
+      
+      if (deleteError) throw deleteError;
       
       toast.success(`Usuário ${pendingUser.email} aprovado com sucesso!`);
       
       // Update the UI
-      setPendingUsers(prev => prev.filter(user => user.uid !== pendingUser.uid));
-      setUsers(prev => [...prev, newUserProfile]);
-    } catch (error) {
+      setPendingUsers(prev => prev.filter(user => user.id !== pendingUser.id));
+      
+      // Fetch the newly created profile with full data including timestamps
+      const { data: newProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', pendingUser.id)
+        .single();
+      
+      if (newProfile) {
+        setUsers(prev => [...prev, newProfile]);
+      }
+    } catch (error: any) {
       console.error('Error approving user:', error);
-      toast.error('Erro ao aprovar usuário');
+      toast.error('Erro ao aprovar usuário: ' + (error.message || 'Tente novamente'));
     }
   };
 
   const rejectUser = async (pendingUser: PendingUser) => {
     try {
-      await deleteDoc(doc(db, 'pendingUsers', pendingUser.uid));
+      const { error } = await supabase
+        .from('pending_users')
+        .delete()
+        .eq('id', pendingUser.id);
+      
+      if (error) throw error;
+      
       toast.success(`Solicitação de ${pendingUser.email} rejeitada`);
-      setPendingUsers(prev => prev.filter(user => user.uid !== pendingUser.uid));
-    } catch (error) {
+      setPendingUsers(prev => prev.filter(user => user.id !== pendingUser.id));
+    } catch (error: any) {
       console.error('Error rejecting user:', error);
-      toast.error('Erro ao rejeitar solicitação');
+      toast.error('Erro ao rejeitar solicitação: ' + (error.message || 'Tente novamente'));
     }
   };
 
-  const updateUserRole = async (uid: string, newRole: 'admin' | 'gestor' | 'vendedor') => {
+  const updateUserRole = async (userId: string, newRole: 'admin' | 'gestor' | 'vendedor') => {
     try {
-      await updateDoc(doc(db, 'users', uid), {
-        role: newRole
-      });
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId);
+      
+      if (error) throw error;
       
       toast.success('Papel do usuário atualizado com sucesso');
       
       setUsers(prev => prev.map(user => 
-        user.uid === uid ? { ...user, role: newRole } : user
+        user.id === userId ? { ...user, role: newRole } : user
       ));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating user role:', error);
-      toast.error('Erro ao atualizar papel do usuário');
+      toast.error('Erro ao atualizar papel do usuário: ' + (error.message || 'Tente novamente'));
     }
   };
 
@@ -127,18 +159,18 @@ const UserManagementPage = () => {
         {pendingUsers.length > 0 && (
           <Card className="bg-white p-6 mb-8">
             <h2 className="text-xl font-semibold mb-4 flex items-center">
-              <Users className="w-6 h-6 text-yellow-500 mr-2" />
+              <User className="w-6 h-6 text-yellow-500 mr-2" />
               Solicitações Pendentes
             </h2>
             
             <div className="space-y-4">
               {pendingUsers.map(user => (
-                <div key={user.uid} className="border rounded-md p-4 flex justify-between items-center">
+                <div key={user.id} className="border rounded-md p-4 flex justify-between items-center">
                   <div>
                     <p className="font-medium">{user.name}</p>
                     <p className="text-sm text-gray-600">{user.email}</p>
                     <p className="text-xs text-gray-500">
-                      Solicitado em: {new Date(user.requestedAt).toLocaleString()}
+                      Solicitado em: {new Date(user.requested_at).toLocaleString()}
                     </p>
                   </div>
                   <div className="flex space-x-2">
@@ -178,20 +210,20 @@ const UserManagementPage = () => {
           ) : (
             <div className="space-y-4">
               {users.map(user => (
-                <div key={user.uid} className="border rounded-md p-4 flex justify-between items-center">
+                <div key={user.id} className="border rounded-md p-4 flex justify-between items-center">
                   <div>
                     <p className="font-medium">{user.name}</p>
                     <p className="text-sm text-gray-600">{user.email}</p>
                     <p className="text-xs text-gray-500">
-                      Criado em: {new Date(user.createdAt).toLocaleString()}
+                      Criado em: {new Date(user.created_at).toLocaleString()}
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-500 mr-2">Papel:</span>
                     <Select
-                      disabled={user.uid === userProfile?.uid || (user.role === 'admin' && userProfile?.role !== 'admin')}
+                      disabled={user.id === userProfile?.id || (user.role === 'admin' && userProfile?.role !== 'admin')}
                       defaultValue={user.role}
-                      onValueChange={(value) => updateUserRole(user.uid, value as 'admin' | 'gestor' | 'vendedor')}
+                      onValueChange={(value) => updateUserRole(user.id, value as 'admin' | 'gestor' | 'vendedor')}
                     >
                       <SelectTrigger className="w-32">
                         <SelectValue />

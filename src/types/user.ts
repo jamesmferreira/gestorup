@@ -1,16 +1,18 @@
 
 export interface UserProfile {
-  uid: string;
+  id: string;
   email: string;
   name: string;
   role: 'admin' | 'gestor' | 'vendedor';
-  approved: boolean;
-  createdAt: number;
+  approved: boolean | null;
+  company_id: string | null;
+  created_at: string;
 }
 
 export interface PendingUser {
-  uid: string;
+  id: string;
   email: string;
   name: string;
-  requestedAt: number;
+  company_id: string | null;
+  requested_at: string;
 }

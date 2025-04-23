@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useForm } from "react-hook-form";
 import Logo from "@/components/Logo";
+import BackButton from "@/components/BackButton";
+import { toast } from "@/components/ui/sonner";
 
 interface RegisterFormValues {
   name: string;
@@ -28,6 +30,7 @@ const RegisterPage = () => {
       await registerUser(data.email, data.password, data.name);
     } catch (error) {
       console.error("Register error:", error);
+      // Error is already handled in the AuthContext
     } finally {
       setIsSubmitting(false);
     }
@@ -35,6 +38,10 @@ const RegisterPage = () => {
 
   return (
     <div className="min-h-screen bg-[#1A1F2C] flex flex-col items-center justify-center p-4">
+      <div className="absolute top-4 left-4">
+        <BackButton />
+      </div>
+      
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Logo />
