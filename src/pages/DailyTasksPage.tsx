@@ -1,31 +1,22 @@
-
 import React, { useEffect, useState } from 'react';
 import { User, Calendar, Plus, Check } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
-import { Task, TaskRecord } from '@/types/task';
+import { supabase } from '@/integrations/supabase/client';
 import { format, startOfDay } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
 import AppLayout from '@/components/AppLayout';
-
-// Importing the Calendar component
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Task, TaskRecord } from '@/types/task';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 
 const DailyTasksPage = () => {
   const { currentUser, userProfile } = useAuth();
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<(Task & { status?: 'pendente' | 'em_progresso' | 'concluido', completedAt?: number })[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [formattedDate, setFormattedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);

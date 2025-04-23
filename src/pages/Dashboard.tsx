@@ -3,15 +3,15 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, CheckCircle, Clock, User } from "lucide-react";
+import { Plus, CheckCircle, Clock, User, LogOut } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
   const [taskStats, setTaskStats] = useState({
     todayTotal: 0,
     todayCompleted: 0,
@@ -23,37 +23,29 @@ const Dashboard = () => {
       if (!currentUser) return;
 
       try {
-        // Get today's date boundaries
-        const today = new Date();
-        const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-        const endOfDay = new Date(today.setHours(23, 59, 59, 999));
-        
-        // Query for today's tasks
-        const tasksQuery = query(
-          collection(db, "tarefas"),
-          where("data", ">=", Timestamp.fromDate(startOfDay)),
-          where("data", "<=", Timestamp.fromDate(endOfDay))
-        );
-        
-        const taskSnapshot = await getDocs(tasksQuery);
-        const todayTotal = taskSnapshot.size;
-        
-        // Count completed tasks
-        let todayCompleted = 0;
-        taskSnapshot.forEach(doc => {
-          if (doc.data().status === "concluído") {
-            todayCompleted++;
-          }
-        });
-        
-        // Get team members count
-        const teamQuery = query(collection(db, "colaboradores"));
-        const teamSnapshot = await getDocs(teamQuery);
-        
+        // Fetch task stats using Supabase instead of Firestore
+        const { data: tasks, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .eq('company_id', currentUser.user_metadata.company_id)
+          .eq('date', new Date().toISOString().split('T')[0]);
+
+        if (error) throw error;
+
+        const todayTotal = tasks.length;
+        const todayCompleted = tasks.filter(task => task.status === 'concluido').length;
+
+        const { data: teamMembers, error: teamError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('company_id', currentUser.user_metadata.company_id);
+
+        if (teamError) throw teamError;
+
         setTaskStats({
           todayTotal,
           todayCompleted,
-          teamMembers: teamSnapshot.size
+          teamMembers: teamMembers.length
         });
       } catch (error) {
         console.error("Error fetching task stats:", error);
@@ -63,10 +55,29 @@ const Dashboard = () => {
     fetchTaskStats();
   }, [currentUser]);
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
+
   return (
-    <AppLayout>
+    <AppLayout showBackButton={false}>
       <div className="mb-8">
-        <h1 className="text-white text-3xl font-semibold mb-2">Dashboard</h1>
+        <div className="flex justify-between items-center">
+          <h1 className="text-white text-3xl font-semibold mb-2">Dashboard</h1>
+          <Button 
+            variant="outline" 
+            onClick={handleLogout}
+            className="text-white border-white/20 hover:bg-white/10 flex items-center gap-2"
+          >
+            <LogOut size={18} />
+            Sair
+          </Button>
+        </div>
         <p className="text-white/70">Bem-vindo ao GestorUp, seu sistema de gestão de equipes e tarefas.</p>
       </div>
       

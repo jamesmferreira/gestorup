@@ -1,10 +1,12 @@
-
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/Logo";
+import BackButton from "@/components/BackButton";
 import { Button } from "@/components/ui/button";
-import { LogOut, Home, CheckSquare, Users, BarChart, Calendar, User } from "lucide-react";
+import { 
+  LogOut, Home, CheckSquare, Users, BarChart, Calendar, User 
+} from "lucide-react";
 
 interface NavLinkProps {
   to: string;
@@ -29,7 +31,10 @@ const NavLink = ({ to, icon, label, active, hidden }: NavLinkProps) => {
   );
 };
 
-const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AppLayout: React.FC<{ children: React.ReactNode, showBackButton?: boolean }> = ({ 
+  children, 
+  showBackButton = true 
+}) => {
   const location = useLocation();
   const { logout, currentUser, userProfile } = useAuth();
 
@@ -41,7 +46,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     <div className="min-h-screen bg-[#1A1F2C] flex flex-col">
       {/* Top header bar */}
       <header className="bg-[#222642] p-4 shadow-md flex justify-between items-center">
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
+          {showBackButton && location.pathname !== '/' && <BackButton />}
           <Logo />
         </div>
         <div className="flex items-center gap-3">

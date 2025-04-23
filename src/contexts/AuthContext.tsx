@@ -1,22 +1,15 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { 
-  User, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  sendPasswordResetEmail, 
-  onAuthStateChanged 
-} from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
+import { supabase } from "@/integrations/supabase/client";
+import { User, Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
-import { doc, getDoc, setDoc, collection, query, where, getDocs, Timestamp, serverTimestamp } from "firebase/firestore";
 import { UserProfile } from "@/types/user";
 
 interface AuthContextType {
   currentUser: User | null;
   userProfile: UserProfile | null;
+  session: Session | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
@@ -37,73 +30,28 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   const fetchUserProfile = async (user: User) => {
     try {
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
       
-      if (userSnap.exists()) {
-        const userData = userSnap.data() as UserProfile;
-        
-        if (!userData.approved) {
-          toast.error("Sua conta está aguardando aprovação por um administrador.");
-          await signOut(auth);
-          navigate("/login");
-          return null;
-        }
-        
-        setUserProfile(userData);
-        return userData;
-      } else {
-        // Check pending users
-        const pendingRef = doc(db, "pendingUsers", user.uid);
-        const pendingSnap = await getDoc(pendingRef);
-        
-        if (pendingSnap.exists()) {
-          toast.info("Sua solicitação de acesso está pendente de aprovação.");
-          await signOut(auth);
-          navigate("/login");
-          return null;
-        }
-        
-        // If user has no profile, create one with admin role for the first user
-        // This is just for the initial setup of the app
-        const usersQuery = query(collection(db, "users"));
-        const usersSnapshot = await getDocs(usersQuery);
-        
-        if (usersSnapshot.empty) {
-          // First user is admin
-          const newUserProfile: UserProfile = {
-            uid: user.uid,
-            email: user.email || "",
-            name: user.displayName || "Admin",
-            role: "admin",
-            approved: true,
-            createdAt: Date.now()
-          };
-          
-          await setDoc(userRef, newUserProfile);
-          setUserProfile(newUserProfile);
-          return newUserProfile;
-        } else {
-          // Any subsequent user needs approval
-          const pendingUser = {
-            uid: user.uid,
-            email: user.email,
-            name: user.displayName || "",
-            requestedAt: Date.now()
-          };
-          
-          await setDoc(pendingRef, pendingUser);
-          toast.info("Sua solicitação de acesso foi registrada. Aguarde aprovação do administrador.");
-          await signOut(auth);
-          navigate("/login");
-          return null;
-        }
+      if (error) throw error;
+      
+      if (!data.approved) {
+        toast.error("Sua conta está aguardando aprovação por um administrador.");
+        await logout();
+        return null;
       }
+      
+      setUserProfile(data);
+      return data;
     } catch (error: any) {
       console.error("Error fetching user profile:", error);
       toast.error("Erro ao carregar perfil do usuário");
@@ -113,8 +61,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     try {
-      const credential = await signInWithEmailAndPassword(auth, email, password);
-      const profile = await fetchUserProfile(credential.user);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (error) throw error;
+      
+      const profile = await fetchUserProfile(data.user!);
       
       if (profile) {
         toast.success("Login realizado com sucesso!");
@@ -129,40 +83,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (email: string, password: string, name: string) => {
     try {
-      const { user } = await createUserWithEmailAndPassword(auth, email, password);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name }
+        }
+      });
       
-      // Check if this is the first user
-      const usersQuery = query(collection(db, "users"));
-      const usersSnapshot = await getDocs(usersQuery);
+      if (error) throw error;
       
-      if (usersSnapshot.empty) {
-        // First user is admin
-        const newUserProfile: UserProfile = {
-          uid: user.uid,
-          email: email,
-          name: name,
-          role: "admin",
-          approved: true,
-          createdAt: Date.now()
-        };
-        
-        await setDoc(doc(db, "users", user.uid), newUserProfile);
-        setUserProfile(newUserProfile);
-        toast.success("Registro realizado com sucesso!");
-        navigate("/");
-      } else {
-        // Subsequent users need approval
-        await setDoc(doc(db, "pendingUsers", user.uid), {
-          uid: user.uid,
-          email: email,
-          name: name,
-          requestedAt: Date.now()
-        });
-        
-        toast.info("Sua solicitação de registro foi enviada. Aguarde a aprovação do administrador.");
-        await signOut(auth);
-        navigate("/login");
-      }
+      toast.info("Sua solicitação de registro foi enviada. Aguarde a aprovação do administrador.");
+      navigate("/login");
     } catch (error: any) {
       console.error(error);
       toast.error("Erro ao registrar: " + (error.message || "Tente novamente"));
@@ -172,8 +104,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await signOut(auth);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      setCurrentUser(null);
       setUserProfile(null);
+      setSession(null);
+      
       toast.success("Logout realizado com sucesso!");
       navigate("/login");
     } catch (error: any) {
@@ -185,7 +122,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resetPassword = async (email: string) => {
     try {
-      await sendPasswordResetEmail(auth, email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      
+      if (error) throw error;
+      
       toast.success("Email de recuperação enviado! Verifique sua caixa de entrada.");
     } catch (error: any) {
       console.error(error);
@@ -195,22 +135,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        await fetchUserProfile(user);
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setSession(session);
+      setCurrentUser(session?.user ?? null);
+      
+      if (session?.user) {
+        await fetchUserProfile(session.user);
       } else {
         setUserProfile(null);
       }
-      setCurrentUser(user);
+      
       setLoading(false);
     });
 
-    return unsubscribe;
+    // Fetch initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setCurrentUser(session?.user ?? null);
+      
+      if (session?.user) {
+        fetchUserProfile(session.user);
+      }
+      
+      setLoading(false);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const value: AuthContextType = {
     currentUser,
     userProfile,
+    session,
     login,
     register,
     logout,

@@ -1,10 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, orderBy, limit, startAfter, DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
-import { format, subDays, startOfDay, endOfDay, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { supabase } from '@/integrations/supabase/client';
+import { format, subDays } from 'date-fns';
 import AppLayout from '@/components/AppLayout';
 import { Calendar as CalendarIcon, Download, BarChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,7 +34,6 @@ const TaskReportsPage = () => {
     pending: 0,
     completionRate: 0
   });
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = useState(true);
   
   const isGestorOrAdmin = userProfile?.role === 'admin' || userProfile?.role === 'gestor';
@@ -52,63 +48,24 @@ const TaskReportsPage = () => {
     try {
       setLoading(true);
       
-      // Format dates for Firestore query
       const startDateStr = format(startDate, 'yyyy-MM-dd');
       const endDateStr = format(endDate, 'yyyy-MM-dd');
       
-      let recordsQuery;
+      const { data, error } = await supabase
+        .from('task_records')
+        .select('*')
+        .gte('date', startDateStr)
+        .lte('date', endDateStr)
+        .eq('company_id', userProfile.company_id)
+        .order('date', { ascending: false });
       
-      if (isGestorOrAdmin) {
-        // Gestores and Admins see all records within date range
-        recordsQuery = query(
-          collection(db, 'taskRecords'),
-          where('date', '>=', startDateStr),
-          where('date', '<=', endDateStr),
-          orderBy('date', 'desc'),
-          limit(20)
-        );
-      } else {
-        // Regular users only see their records
-        recordsQuery = query(
-          collection(db, 'taskRecords'),
-          where('userId', '==', userProfile.uid),
-          where('date', '>=', startDateStr),
-          where('date', '<=', endDateStr),
-          orderBy('date', 'desc'),
-          limit(20)
-        );
-      }
-      
-      // If loading more, start after the last document
-      if (loadMore && lastDoc) {
-        recordsQuery = query(
-          collection(db, 'taskRecords'),
-          where('date', '>=', startDateStr),
-          where('date', '<=', endDateStr),
-          orderBy('date', 'desc'),
-          startAfter(lastDoc),
-          limit(20)
-        );
-      }
-      
-      const recordsSnapshot = await getDocs(recordsQuery);
-      const recordsData: TaskRecord[] = [];
-      
-      recordsSnapshot.forEach((doc) => {
-        recordsData.push({ id: doc.id, ...doc.data() } as TaskRecord);
-      });
-      
-      // Update last document for pagination
-      const lastVisible = recordsSnapshot.docs[recordsSnapshot.docs.length - 1];
-      setLastDoc(lastVisible);
-      setHasMore(!recordsSnapshot.empty && recordsSnapshot.docs.length === 20);
+      if (error) throw error;
       
       // Calculate stats
-      const allRecords = loadMore ? [...records, ...recordsData] : recordsData;
-      const total = allRecords.length;
-      const completed = allRecords.filter(r => r.status === 'concluido').length;
-      const inProgress = allRecords.filter(r => r.status === 'em_progresso').length;
-      const pending = allRecords.filter(r => r.status === 'pendente').length;
+      const total = data.length;
+      const completed = data.filter(r => r.status === 'concluido').length;
+      const inProgress = data.filter(r => r.status === 'em_progresso').length;
+      const pending = data.filter(r => r.status === 'pendente').length;
       
       setStats({
         total,
@@ -118,9 +75,11 @@ const TaskReportsPage = () => {
         completionRate: total > 0 ? (completed / total) * 100 : 0
       });
       
-      setRecords(loadMore ? [...records, ...recordsData] : recordsData);
+      setRecords(data);
+      setHasMore(false);
     } catch (error) {
       console.error('Error fetching task records:', error);
+      toast.error('Erro ao carregar registros de tarefas');
     } finally {
       setLoading(false);
     }
